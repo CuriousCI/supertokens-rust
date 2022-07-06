@@ -1,4 +1,4 @@
-use reqwest;
+use reqwest::{self, Client, Method, Response};
 use url::Url;
 
 pub struct AppInfo<'a> {
@@ -47,11 +47,26 @@ pub struct Supertokens<'a> {
 pub trait Recipe {}
 
 impl<'a> Supertokens<'a> {
-    pub async fn hello(self) -> Result<String, reqwest::Error> {
-        reqwest::get(self.connection.connection_uri)
-            .await?
-            .text()
+    async fn request(self, method: Method, path: &str) -> Result<Response, reqwest::Error> {
+        let client = Client::new();
+
+        let mut uri = self.connection.connection_uri.clone();
+        uri.set_path(self.app_info.api_base_path);
+        uri = uri.join(path).unwrap();
+
+        client
+            .request(method, uri)
+            .header("api-key", self.connection.api_key)
+            .send()
             .await
+    }
+
+    pub async fn apiversion(self) -> Result<String, reqwest::Error> {
+        self.request(Method::GET, "/apiversion").await?.text().await
+    }
+
+    pub async fn hello(self) -> Result<String, reqwest::Error> {
+        self.request(Method::GET, "/hello").await?.text().await
     }
 }
 
@@ -66,6 +81,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn apiversion() {
+        let supertokens = Supertokens {
+            app_info: AppInfo {
+                ..Default::default()
+            },
+            connection: Connection {
+                api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
+                ..Default::default()
+            },
+            recipe_list: vec![],
+            telemetry: Some(false),
+        };
+
+        let result = supertokens
+            .apiversion()
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert!(!result.is_empty())
+    }
+
+    #[tokio::test]
     async fn it_connects_to_supertokens() {
         let supertokens = Supertokens {
             app_info: AppInfo {
@@ -75,7 +112,7 @@ mod tests {
                 ..Default::default()
             },
             recipe_list: vec![],
-            telemetry: Some(true),
+            telemetry: Some(false),
         };
 
         let result = supertokens
@@ -83,6 +120,6 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result, String::from("hello"));
+        assert_eq!(result.trim(), String::from("Hello"));
     }
 }
