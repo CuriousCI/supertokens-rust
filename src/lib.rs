@@ -1,4 +1,5 @@
-use reqwest::{self, Client, Method, Response};
+use reqwest::{self, Client, Method, RequestBuilder};
+use serde::Deserialize;
 use url::Url;
 
 pub struct AppInfo<'a> {
@@ -38,46 +39,116 @@ impl Default for Connection<'_> {
 }
 
 pub struct Supertokens<'a> {
-    pub app_info: AppInfo<'a>,
+    app_info: AppInfo<'a>,
     pub connection: Connection<'a>,
-    pub recipe_list: Vec<Box<dyn Recipe>>,
-    pub telemetry: Option<bool>,
+    recipe_list: Vec<Box<dyn Recipe>>,
+    telemetry: Option<bool>,
 }
 
 pub trait Recipe {}
 
+// #[derive(Deserialize)]
+// pub struct ApiVersions {
+// 	pub
+// }
+
+#[derive(Deserialize)]
+pub struct Config {
+    pub status: String,
+    pub path: Option<String>,
+}
+
 impl<'a> Supertokens<'a> {
-    async fn request(self, method: Method, path: &str) -> Result<Response, reqwest::Error> {
+    pub fn new(
+        app_info: AppInfo<'a>,
+        mut connection: Connection<'a>,
+        recipe_list: Vec<Box<dyn Recipe>>,
+        telemetry: Option<bool>,
+    ) -> Self {
+        connection.connection_uri.set_path(app_info.api_base_path);
+
+        Self {
+            app_info: app_info,
+            connection: connection,
+            recipe_list: recipe_list,
+            telemetry: telemetry,
+        }
+    }
+    // Result<Response, reqwest::Error>
+    fn request(self, method: Method, path: &str) -> RequestBuilder {
         let client = Client::new();
 
-        let mut uri = self.connection.connection_uri.clone();
-        uri.set_path(self.app_info.api_base_path);
-        uri = uri.join(path).unwrap();
+        let uri = self
+            .connection
+            .connection_uri
+            .join(path)
+            .expect("Invalid 'path' format");
 
         client
             .request(method, uri)
             .header("api-key", self.connection.api_key)
-            .send()
-            .await
+        // .send()
+        // .await
     }
 
     pub async fn apiversion(self) -> Result<String, reqwest::Error> {
-        self.request(Method::GET, "/apiversion").await?.text().await
+        self.request(Method::GET, "/apiversion")
+            .send()
+            .await?
+            .text()
+            .await
+    }
+
+    pub async fn config(self, cdi_version: &str, pid: &str) -> Result<Config, reqwest::Error> {
+        // 2.14
+        self.request(Method::GET, "/config")
+            .header("cdi-version", cdi_version)
+            .query(&[("pid", pid)])
+            .send()
+            .await?
+            .json::<Config>()
+            .await
     }
 
     pub async fn hello(self) -> Result<String, reqwest::Error> {
-        self.request(Method::GET, "/hello").await?.text().await
+        self.request(Method::GET, "/hello")
+            .send()
+            .await?
+            .text()
+            .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{AppInfo, Connection, Supertokens};
+    use url::Url;
 
     #[test]
     fn it_works() {
         let result = 2 + 2;
         assert_eq!(result, 4);
+    }
+
+    #[test]
+    fn test_connection_uri() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                api_base_path: "/api",
+                ..Default::default()
+            },
+            Connection {
+                api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
+                connection_uri: Url::parse("https://0.0.0.0").unwrap(),
+            },
+            vec![],
+            Some(false),
+        );
+
+        assert_eq!(
+            supertokens.connection.connection_uri.as_str(),
+            "https://0.0.0.0/api"
+        )
     }
 
     #[tokio::test]
@@ -99,7 +170,30 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert!(!result.is_empty())
+        // assert!(!result.is_empty())
+        assert_eq!(result.trim(), "help")
+    }
+
+    #[tokio::test]
+    async fn test_config_file() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
+                ..Default::default()
+            },
+            vec![],
+            Some(false),
+        );
+
+        let result = supertokens
+            .config("2.13", "10540")
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.status, "NOT_ALLOWED")
     }
 
     #[tokio::test]
