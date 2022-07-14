@@ -1,14 +1,17 @@
+use recipe::Recipe;
 use reqwest::{self, Client, Method, RequestBuilder};
 use serde::Deserialize;
 use url::Url;
 
+pub mod recipe;
+
 pub struct AppInfo<'a> {
     pub app_name: &'a str,
-    pub api_domain: Url,
     pub website_domain: Url,
-    pub api_gateway_path: &'a str,
-    pub api_base_path: &'a str,
+    pub api_domain: Url,
     pub website_base_path: &'a str,
+    pub api_base_path: &'a str,
+    pub api_gateway_path: &'a str,
 }
 
 impl Default for AppInfo<'_> {
@@ -25,14 +28,14 @@ impl Default for AppInfo<'_> {
 }
 
 pub struct Connection<'a> {
-    pub connection_uri: Url,
+    pub uri: Url,
     pub api_key: &'a str,
 }
 
 impl Default for Connection<'_> {
     fn default() -> Self {
         Self {
-            connection_uri: Url::parse("http://127.0.0.1:3567").unwrap(),
+            uri: Url::parse("http://127.0.0.1:3567").unwrap(),
             api_key: "",
         }
     }
@@ -40,17 +43,16 @@ impl Default for Connection<'_> {
 
 pub struct Supertokens<'a> {
     app_info: AppInfo<'a>,
+    recipe_list: Vec<Box<dyn Recipe<'a>>>,
     pub connection: Connection<'a>,
-    recipe_list: Vec<Box<dyn Recipe>>,
-    telemetry: Option<bool>,
+    telemetry: bool,
+    // cdi_version: &'a str,
 }
 
-pub trait Recipe {}
-
-// #[derive(Deserialize)]
-// pub struct ApiVersions {
-// 	pub
-// }
+#[derive(Deserialize)]
+pub struct ApiVersions {
+    pub versions: Vec<String>,
+}
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -62,10 +64,11 @@ impl<'a> Supertokens<'a> {
     pub fn new(
         app_info: AppInfo<'a>,
         mut connection: Connection<'a>,
-        recipe_list: Vec<Box<dyn Recipe>>,
-        telemetry: Option<bool>,
+        recipe_list: Vec<Box<dyn Recipe<'a>>>,
+        cdi_version: &'a str,
+        telemetry: bool,
     ) -> Self {
-        connection.connection_uri.set_path(app_info.api_base_path);
+        connection.uri.set_path(app_info.api_base_path);
 
         Self {
             app_info: app_info,
@@ -80,7 +83,7 @@ impl<'a> Supertokens<'a> {
 
         let uri = self
             .connection
-            .connection_uri
+            .uri
             .join(path)
             .expect("Invalid 'path' format");
 
@@ -139,16 +142,13 @@ mod tests {
             },
             Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
-                connection_uri: Url::parse("https://0.0.0.0").unwrap(),
+                uri: Url::parse("https://0.0.0.0").unwrap(),
             },
             vec![],
-            Some(false),
+            false,
         );
 
-        assert_eq!(
-            supertokens.connection.connection_uri.as_str(),
-            "https://0.0.0.0/api"
-        )
+        assert_eq!(supertokens.connection.uri.as_str(), "https://0.0.0.0/api")
     }
 
     #[tokio::test]
@@ -162,7 +162,7 @@ mod tests {
                 ..Default::default()
             },
             recipe_list: vec![],
-            telemetry: Some(false),
+            telemetry: false,
         };
 
         let result = supertokens
@@ -185,7 +185,7 @@ mod tests {
                 ..Default::default()
             },
             vec![],
-            Some(false),
+            false,
         );
 
         let result = supertokens
@@ -206,7 +206,7 @@ mod tests {
                 ..Default::default()
             },
             recipe_list: vec![],
-            telemetry: Some(false),
+            telemetry: false,
         };
 
         let result = supertokens
