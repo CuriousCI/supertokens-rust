@@ -2,6 +2,7 @@ use recipe::Recipe;
 use reqwest::{self, Client, Method, RequestBuilder};
 use serde::Deserialize;
 use url::Url;
+use uuid::Uuid;
 
 pub mod recipe;
 
@@ -65,7 +66,7 @@ impl<'a> Supertokens<'a> {
         app_info: AppInfo<'a>,
         mut connection: Connection<'a>,
         recipe_list: Vec<Box<dyn Recipe<'a>>>,
-        cdi_version: &'a str,
+        // cdi_version: &'a str,
         telemetry: bool,
     ) -> Self {
         connection.uri.set_path(app_info.api_base_path);
@@ -119,6 +120,31 @@ impl<'a> Supertokens<'a> {
             .await?
             .text()
             .await
+    }
+
+    pub async fn get_user_count<'b>(recipe_ids: Vec<&'b str>) -> u64 {
+        // TODO
+        10
+    }
+
+    pub async fn get_users_oldest_first<'b>(
+        pagination_token: &'b str,
+        limit: i32,
+        recipe_ids: Vec<&'b str>,
+    ) {
+        // TODO
+    }
+
+    pub async fn get_users_newest_first<'b>(
+        pagination_token: &'b str,
+        limit: i32,
+        recipe_ids: Vec<&'b str>,
+    ) {
+        // TODO
+    }
+
+    pub async fn delete_user(user_id: Uuid) {
+        // TODO
     }
 }
 
