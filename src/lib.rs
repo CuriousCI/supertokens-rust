@@ -1,6 +1,7 @@
 use recipe::Recipe;
 use reqwest::{self, Client, Method, RequestBuilder};
 use serde::Deserialize;
+use serde_json::json;
 use url::Url;
 use uuid::Uuid;
 
@@ -59,6 +60,11 @@ pub struct Telemetry {
     pub exists: bool,
     #[serde(rename(deserialize = "telemetryId"))]
     pub telemetry_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct Status {
+    pub status: String,
 }
 
 pub struct Supertokens<'a> {
@@ -167,8 +173,21 @@ impl<'a> Supertokens<'a> {
         // TODO
     }
 
-    pub async fn delete_user(user_id: Uuid) {
-        // TODO
+    pub async fn remove_user(&self, user_id: Uuid) -> Result<Status, reqwest::Error> {
+        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
+
+        let cdi_version = api_versions
+            .versions
+            .first()
+            .expect("No CDI version available");
+
+        self.request(Method::POST, "/user/remove")
+            .header("cdi-version", cdi_version.as_str())
+            .body(json!({ "userId": user_id }).to_string())
+            .send()
+            .await?
+            .json::<Status>()
+            .await
     }
 }
 
@@ -178,6 +197,7 @@ mod tests {
     use reqwest::Method;
     use std::vec;
     use url::Url;
+    use uuid::Uuid;
 
     #[test]
     fn test_connection_uri() {
@@ -272,6 +292,28 @@ mod tests {
             result.telemetry_id.expect("No telemetry ID found"),
             "cec902d6-d2c0-4bcd-9a51-129112882343"
         )
+    }
+
+    #[tokio::test]
+    async fn test_remove_user() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
+                ..Default::default()
+            },
+            &[],
+            false,
+        );
+
+        let result = supertokens
+            .remove_user(Uuid::new_v4())
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.status, "OK")
     }
 
     #[tokio::test]
