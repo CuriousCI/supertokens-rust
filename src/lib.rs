@@ -4,6 +4,7 @@ use serde::Deserialize;
 use url::Url;
 use uuid::Uuid;
 
+pub mod ingredients;
 pub mod recipe;
 
 pub struct AppInfo<'a> {
@@ -42,14 +43,6 @@ impl Default for Connection<'_> {
     }
 }
 
-pub struct Supertokens<'a> {
-    app_info: AppInfo<'a>,
-    recipe_list: Vec<Box<dyn Recipe<'a>>>,
-    pub connection: Connection<'a>,
-    telemetry: bool,
-    // cdi_version: &'a str,
-}
-
 #[derive(Deserialize)]
 pub struct ApiVersions {
     pub versions: Vec<String>,
@@ -60,12 +53,19 @@ pub struct Config {
     pub status: String,
     pub path: Option<String>,
 }
+pub struct Supertokens<'a> {
+    app_info: AppInfo<'a>,
+    recipe_list: &'a [Box<dyn Recipe<'a>>],
+    pub connection: Connection<'a>,
+    telemetry: bool,
+}
 
 impl<'a> Supertokens<'a> {
     pub fn new(
         app_info: AppInfo<'a>,
         mut connection: Connection<'a>,
-        recipe_list: Vec<Box<dyn Recipe<'a>>>,
+        recipe_list: &'a [Box<dyn Recipe<'a>>],
+        // recipe_list: Vec<Box<dyn Recipe<'a>>>,
         // cdi_version: &'a str,
         telemetry: bool,
     ) -> Self {
@@ -78,8 +78,8 @@ impl<'a> Supertokens<'a> {
             telemetry: telemetry,
         }
     }
-    // Result<Response, reqwest::Error>
-    fn request(self, method: Method, path: &str) -> RequestBuilder {
+
+    fn request(&self, method: Method, path: &str) -> RequestBuilder {
         let client = Client::new();
 
         let uri = self
@@ -91,22 +91,26 @@ impl<'a> Supertokens<'a> {
         client
             .request(method, uri)
             .header("api-key", self.connection.api_key)
-        // .send()
-        // .await
     }
 
-    pub async fn apiversion(self) -> Result<String, reqwest::Error> {
+    pub async fn apiversion(&self) -> Result<ApiVersions, reqwest::Error> {
         self.request(Method::GET, "/apiversion")
             .send()
             .await?
-            .text()
+            .json::<ApiVersions>()
             .await
     }
 
-    pub async fn config(self, cdi_version: &str, pid: &str) -> Result<Config, reqwest::Error> {
-        // 2.14
+    pub async fn config(&self, pid: &str) -> Result<Config, reqwest::Error> {
+        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
+
+        let cdi_version = api_versions
+            .versions
+            .first()
+            .expect("No CDI version available");
+
         self.request(Method::GET, "/config")
-            .header("cdi-version", cdi_version)
+            .header("cdi-version", cdi_version.as_str())
             .query(&[("pid", pid)])
             .send()
             .await?
@@ -122,7 +126,7 @@ impl<'a> Supertokens<'a> {
             .await
     }
 
-    pub async fn get_user_count<'b>(recipe_ids: Vec<&'b str>) -> u64 {
+    pub async fn get_user_count<'b>(recipe_ids: &[&'b str]) -> u64 {
         // TODO
         10
     }
@@ -130,7 +134,7 @@ impl<'a> Supertokens<'a> {
     pub async fn get_users_oldest_first<'b>(
         pagination_token: &'b str,
         limit: i32,
-        recipe_ids: Vec<&'b str>,
+        recipe_ids: &[&'b str],
     ) {
         // TODO
     }
@@ -138,7 +142,7 @@ impl<'a> Supertokens<'a> {
     pub async fn get_users_newest_first<'b>(
         pagination_token: &'b str,
         limit: i32,
-        recipe_ids: Vec<&'b str>,
+        recipe_ids: &[&'b str],
     ) {
         // TODO
     }
@@ -150,6 +154,8 @@ impl<'a> Supertokens<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use crate::{AppInfo, Connection, Supertokens};
     use url::Url;
 
@@ -170,7 +176,7 @@ mod tests {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
                 uri: Url::parse("https://0.0.0.0").unwrap(),
             },
-            vec![],
+            &[],
             false,
         );
 
@@ -187,7 +193,7 @@ mod tests {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
                 ..Default::default()
             },
-            recipe_list: vec![],
+            recipe_list: &[],
             telemetry: false,
         };
 
@@ -196,8 +202,10 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        // assert!(!result.is_empty())
-        assert_eq!(result.trim(), "help")
+        assert_eq!(
+            result.versions,
+            vec!["2.13", "2.12", "2.7", "2.11", "2.8", "2.10", "2.9"]
+        )
     }
 
     #[tokio::test]
@@ -210,16 +218,16 @@ mod tests {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
                 ..Default::default()
             },
-            vec![],
+            &[],
             false,
         );
 
         let result = supertokens
-            .config("2.13", "10540")
+            .config("10512")
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.status, "NOT_ALLOWED")
+        assert_eq!(result.status, "OK")
     }
 
     #[tokio::test]
@@ -231,7 +239,7 @@ mod tests {
             connection: Connection {
                 ..Default::default()
             },
-            recipe_list: vec![],
+            recipe_list: &[],
             telemetry: false,
         };
 
