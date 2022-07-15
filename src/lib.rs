@@ -53,6 +53,14 @@ pub struct Config {
     pub status: String,
     pub path: Option<String>,
 }
+
+#[derive(Deserialize)]
+pub struct Telemetry {
+    pub exists: bool,
+    #[serde(rename(deserialize = "telemetryId"))]
+    pub telemetry_id: Option<String>,
+}
+
 pub struct Supertokens<'a> {
     app_info: AppInfo<'a>,
     recipe_list: &'a [Box<dyn Recipe<'a>>],
@@ -118,12 +126,24 @@ impl<'a> Supertokens<'a> {
             .await
     }
 
-    pub async fn hello(self) -> Result<String, reqwest::Error> {
-        self.request(Method::GET, "/hello")
+    pub async fn telemetry(&self) -> Result<Telemetry, reqwest::Error> {
+        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
+
+        let cdi_version = api_versions
+            .versions
+            .first()
+            .expect("No CDI version available");
+
+        self.request(Method::GET, "/telemetry")
+            .header("cdi-version", cdi_version.as_str())
             .send()
             .await?
-            .text()
+            .json::<Telemetry>()
             .await
+    }
+
+    pub async fn hello(&self, method: Method) -> Result<String, reqwest::Error> {
+        self.request(method, "/hello").send().await?.text().await
     }
 
     pub async fn get_user_count<'b>(recipe_ids: &[&'b str]) -> u64 {
@@ -154,16 +174,10 @@ impl<'a> Supertokens<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use crate::{AppInfo, Connection, Supertokens};
+    use reqwest::Method;
+    use std::vec;
     use url::Url;
-
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
 
     #[test]
     fn test_connection_uri() {
@@ -184,7 +198,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apiversion() {
+    async fn test_apiversions() {
         let supertokens = Supertokens {
             app_info: AppInfo {
                 ..Default::default()
@@ -231,20 +245,113 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_connects_to_supertokens() {
-        let supertokens = Supertokens {
-            app_info: AppInfo {
+    async fn test_telemetry_id() {
+        let supertokens = Supertokens::new(
+            AppInfo {
                 ..Default::default()
             },
-            connection: Connection {
+            Connection {
+                api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
                 ..Default::default()
             },
-            recipe_list: &[],
-            telemetry: false,
-        };
+            &[],
+            true,
+        );
+
+        // let result = supertokens
+        //     .config("10512")
+        //     .await
+        //     .expect("SuperTokens connection failed");
+        let result = supertokens
+            .telemetry()
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.exists, true);
+        assert_eq!(
+            result.telemetry_id.expect("No telemetry ID found"),
+            "cec902d6-d2c0-4bcd-9a51-129112882343"
+        )
+    }
+
+    #[tokio::test]
+    async fn test_get_hello() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                ..Default::default()
+            },
+            &[],
+            false,
+        );
 
         let result = supertokens
-            .hello()
+            .hello(Method::GET)
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.trim(), String::from("Hello"));
+    }
+
+    #[tokio::test]
+    async fn test_put_hello() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                ..Default::default()
+            },
+            &[],
+            false,
+        );
+
+        let result = supertokens
+            .hello(Method::PUT)
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.trim(), String::from("Hello"));
+    }
+
+    #[tokio::test]
+    async fn test_post_hello() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                ..Default::default()
+            },
+            &[],
+            false,
+        );
+
+        let result = supertokens
+            .hello(Method::POST)
+            .await
+            .expect("SuperTokens connection failed");
+
+        assert_eq!(result.trim(), String::from("Hello"));
+    }
+
+    #[tokio::test]
+    async fn test_delete_hello() {
+        let supertokens = Supertokens::new(
+            AppInfo {
+                ..Default::default()
+            },
+            Connection {
+                ..Default::default()
+            },
+            &[],
+            false,
+        );
+
+        let result = supertokens
+            .hello(Method::DELETE)
             .await
             .expect("SuperTokens connection failed");
 
