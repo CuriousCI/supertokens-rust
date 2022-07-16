@@ -225,7 +225,7 @@ mod tests {
             },
             connection: Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
-                ..Default::default()
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
             },
             recipe_list: &[],
             telemetry: false,
@@ -238,7 +238,7 @@ mod tests {
 
         assert_eq!(
             result.versions,
-            vec!["2.13", "2.12", "2.7", "2.11", "2.8", "2.10", "2.9"]
+            vec!["2.14", "2.13", "2.12", "2.7", "2.11", "2.8", "2.10", "2.9"]
         )
     }
 
@@ -250,7 +250,7 @@ mod tests {
             },
             Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
-                ..Default::default()
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
             },
             &[],
             false,
@@ -272,16 +272,12 @@ mod tests {
             },
             Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
-                ..Default::default()
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
             },
             &[],
             true,
         );
 
-        // let result = supertokens
-        //     .config("10512")
-        //     .await
-        //     .expect("SuperTokens connection failed");
         let result = supertokens
             .telemetry()
             .await
@@ -302,7 +298,7 @@ mod tests {
             },
             Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
-                ..Default::default()
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
             },
             &[],
             false,
@@ -323,6 +319,7 @@ mod tests {
                 ..Default::default()
             },
             Connection {
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
                 ..Default::default()
             },
             &[],
@@ -344,6 +341,7 @@ mod tests {
                 ..Default::default()
             },
             Connection {
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
                 ..Default::default()
             },
             &[],
@@ -365,6 +363,7 @@ mod tests {
                 ..Default::default()
             },
             Connection {
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
                 ..Default::default()
             },
             &[],
@@ -386,6 +385,7 @@ mod tests {
                 ..Default::default()
             },
             Connection {
+                uri: Url::parse("https://try.supertokens.com").unwrap(),
                 ..Default::default()
             },
             &[],
