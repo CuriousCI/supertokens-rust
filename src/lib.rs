@@ -261,7 +261,7 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.status, "OK")
+        assert_eq!(result.status, "NOT_ALLOWED")
     }
 
     #[tokio::test]
@@ -283,7 +283,7 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.exists, true);
+        assert_eq!(result.exists, false);
         assert_eq!(
             result.telemetry_id.expect("No telemetry ID found"),
             "cec902d6-d2c0-4bcd-9a51-129112882343"
