@@ -72,6 +72,7 @@ pub struct Supertokens<'a> {
     recipe_list: &'a [Box<dyn Recipe<'a>>],
     pub connection: Connection<'a>,
     telemetry: bool,
+    client: Client,
 }
 
 impl<'a> Supertokens<'a> {
@@ -79,8 +80,6 @@ impl<'a> Supertokens<'a> {
         app_info: AppInfo<'a>,
         mut connection: Connection<'a>,
         recipe_list: &'a [Box<dyn Recipe<'a>>],
-        // recipe_list: Vec<Box<dyn Recipe<'a>>>,
-        // cdi_version: &'a str,
         telemetry: bool,
     ) -> Self {
         connection.uri.set_path(app_info.api_base_path);
@@ -90,41 +89,39 @@ impl<'a> Supertokens<'a> {
             connection: connection,
             recipe_list: recipe_list,
             telemetry: telemetry,
+            client: Client::new(),
         }
     }
 
     fn request(&self, method: Method, path: &str) -> RequestBuilder {
-        let client = Client::new();
-
         let uri = self
             .connection
             .uri
             .join(path)
             .expect("Invalid 'path' format");
 
-        client
+        self.client
             .request(method, uri)
             .header("api-key", self.connection.api_key)
     }
 
-    pub async fn apiversion(&self) -> Result<ApiVersions, reqwest::Error> {
+    pub async fn api_version(&self) -> String {
         self.request(Method::GET, "/apiversion")
             .send()
-            .await?
+            .await
+            .expect("Could not connect to SuperTokens instance")
             .json::<ApiVersions>()
             .await
+            .expect("Could not parse CDI response")
+            .versions
+            .first()
+            .expect("No CDI version available")
+            .to_owned()
     }
 
     pub async fn config(&self, pid: &str) -> Result<Config, reqwest::Error> {
-        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
-
-        let cdi_version = api_versions
-            .versions
-            .first()
-            .expect("No CDI version available");
-
         self.request(Method::GET, "/config")
-            .header("cdi-version", cdi_version.as_str())
+            .header("cdi-version", self.api_version().await)
             .query(&[("pid", pid)])
             .send()
             .await?
@@ -133,15 +130,8 @@ impl<'a> Supertokens<'a> {
     }
 
     pub async fn telemetry(&self) -> Result<Telemetry, reqwest::Error> {
-        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
-
-        let cdi_version = api_versions
-            .versions
-            .first()
-            .expect("No CDI version available");
-
         self.request(Method::GET, "/telemetry")
-            .header("cdi-version", cdi_version.as_str())
+            .header("cdi-version", self.api_version().await)
             .send()
             .await?
             .json::<Telemetry>()
@@ -152,37 +142,18 @@ impl<'a> Supertokens<'a> {
         self.request(method, "/hello").send().await?.text().await
     }
 
-    pub async fn get_user_count<'b>(recipe_ids: &[&'b str]) -> u64 {
+    pub async fn users_count<'b>(recipe_ids: &[&'b str]) -> u64 {
         // TODO
         10
     }
 
-    pub async fn get_users_oldest_first<'b>(
-        pagination_token: &'b str,
-        limit: i32,
-        recipe_ids: &[&'b str],
-    ) {
-        // TODO
-    }
-
-    pub async fn get_users_newest_first<'b>(
-        pagination_token: &'b str,
-        limit: i32,
-        recipe_ids: &[&'b str],
-    ) {
+    pub async fn users<'b>(pagination_token: &'b str, limit: i32, recipe_ids: &[&'b str]) {
         // TODO
     }
 
     pub async fn remove_user(&self, user_id: Uuid) -> Result<Status, reqwest::Error> {
-        let api_versions = self.apiversion().await.expect("Could not connect o CDI");
-
-        let cdi_version = api_versions
-            .versions
-            .first()
-            .expect("No CDI version available");
-
         self.request(Method::POST, "/user/remove")
-            .header("cdi-version", cdi_version.as_str())
+            .header("cdi-version", self.api_version().await)
             .body(json!({ "userId": user_id }).to_string())
             .send()
             .await?
@@ -195,7 +166,6 @@ impl<'a> Supertokens<'a> {
 mod tests {
     use crate::{AppInfo, Connection, Supertokens};
     use reqwest::Method;
-    use std::vec;
     use url::Url;
     use uuid::Uuid;
 
@@ -219,27 +189,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_apiversions() {
-        let supertokens = Supertokens {
-            app_info: AppInfo {
+        let supertokens = Supertokens::new(
+            AppInfo {
                 ..Default::default()
             },
-            connection: Connection {
+            Connection {
                 api_key: "81ed5e4b-33e2-4feb-a223-b9022f3e2b91",
                 uri: Url::parse("https://try.supertokens.com").unwrap(),
             },
-            recipe_list: &[],
-            telemetry: false,
-        };
+            &[],
+            false,
+        );
 
-        let result = supertokens
-            .apiversion()
-            .await
-            .expect("SuperTokens connection failed");
-
-        assert_eq!(
-            result.versions,
-            vec!["2.14", "2.13", "2.12", "2.7", "2.11", "2.8", "2.10", "2.9"]
-        )
+        assert_eq!(supertokens.api_version().await, "2.14")
     }
 
     #[tokio::test]
@@ -331,7 +293,7 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.trim(), String::from("Hello"));
+        assert_eq!(result.trim(), "Hello");
     }
 
     #[tokio::test]
@@ -353,7 +315,7 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.trim(), String::from("Hello"));
+        assert_eq!(result.trim(), "Hello");
     }
 
     #[tokio::test]
@@ -375,7 +337,7 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.trim(), String::from("Hello"));
+        assert_eq!(result.trim(), "Hello");
     }
 
     #[tokio::test]
@@ -397,6 +359,6 @@ mod tests {
             .await
             .expect("SuperTokens connection failed");
 
-        assert_eq!(result.trim(), String::from("Hello"));
+        assert_eq!(result.trim(), "Hello");
     }
 }
