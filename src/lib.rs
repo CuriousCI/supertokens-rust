@@ -105,6 +105,8 @@ impl<'a> Supertokens<'a> {
             .header("api-key", self.connection.api_key)
     }
 
+    pub async fn send_telemetry(self) -> () {}
+
     pub async fn api_version(&self) -> String {
         self.request(Method::GET, "/apiversion")
             .send()
@@ -188,7 +190,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_apiversions() {
+    async fn test_apiversion() {
         let supertokens = Supertokens::new(
             AppInfo {
                 ..Default::default()
@@ -201,7 +203,7 @@ mod tests {
             false,
         );
 
-        assert_eq!(supertokens.api_version().await, "2.14")
+        assert_eq!(supertokens.api_version().await, "2.15")
     }
 
     #[tokio::test]
